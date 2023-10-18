@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kubernetes Workloads Viewer</title>
+<style>
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 8px; border: 1px solid #ddd; text-align: left; }
+  th { background-color: #f4f4f4; }
+  .empty-row { background-color: transparent; border: none; }
+  .empty-row td { border: none; }
+  .hidden { display: none; }
+  .image-tag { background-color: #31f5f5; padding: 2px 4px; border-radius: 4px; }
+  .level-0 {}
+  .level-1 { padding-left: 10px; }
+  .level-2 { padding-left: 30px; }
+  .group-deployment { background-color: #e0f7fa; }
+  .group-statefulset { background-color: #e8f5e9; }
+  .group-standalone-pod { background-color: #fffde7; }
+  .status-green { background-color: #d4edda; color: #155724; }
+  .status-red { background-color: #f8d7da; color: #721c24; }
+</style>
+</head>
+<body>
+<h2>Kubernetes Workloads in Namespace: <span id="namespaceName"></span></h2>
+<div id="instructions">
+  <p>If a specific namespace is not specified in the URL query parameters (e.g., ?namespace=your-namespace), it defaults to showing workloads from the "default" namespace.</p>
+</div>
+<table id="workloadsTable">
+  <thead>
+    <tr>
+      <th>Type</th>
+      <th>Name</th>
+      <th>Images</th>
+      <th>Replicas</th>
+      <th>Helm Time</th>
+      <th>Update Time</th>
+    </tr>
+  </thead>
+  <tbody>
+    <!-- Data will be populated here -->
+  </tbody>
+</table>
+<script>
+  async function fetchAndDisplayWorkloads(namespace) {
+    try {
+      const res = await fetch(`/api/workloads/${namespace}`);
+      const data = await res.json();
+      const tableBody = document.querySelector("#workloadsTable tbody");
+
+      document.getElementById('namespaceName').textContent = namespace;
+      tableBody.innerHTML = '';
+      addEmptyRow();
+
+      function addEmptyRow() {
+        const row = `<tr class="empty-row"><td colspan="6"></td></tr>`;
+        tableBody.insertAdjacentHTML('beforeend', row);
+      }
+
+      function addRow(type, item, level = 0, groupClass = '') {
+        const prefix = level > 0 ? '↳ ' : '';
+
+        let statusOrReadyReplicas = 'N/A';
+        if (type === 'Pod') {
+          statusOrReadyReplicas = item.status || 'N/A';
+        } else {
+          statusOrReadyReplicas = item.readyReplicas || 'N/A';
+        }
+
+        let statusClass = 'status-red';
+        if ((type === 'Pod' && item.status === 'Running') ||
+            (item.readyReplicas >= 1)) {
+          statusClass = 'status-green';
+        }
+
+        function highlightImageTags(images) {
+          if (!images) return 'N/A';
+          return images.map(image => {
+            const parts = image.split(':');
+            if (parts.length === 2) {
+              return `<nobr>${parts[0]}:<span class="image-tag">${parts[1]}</span></nobr>`;
+            }
+            return image;
+          }).join(', ');
+        }
+
+        function timeAgo(dateISOString) {
+          const date = new Date(dateISOString);
+          const seconds = Math.floor((new Date() - date) / 1000);
+
+          let interval = seconds / 31536000;
+
+          if (interval > 1) {
+            const years = Math.floor(interval);
+            const months = Math.floor((interval - years) * 12);
+            return months > 0 ? `${years}y ${months}mo` : `${years}y`;
+          }
+
+          interval = seconds / 2592000;
+          if (interval > 1) {
+            const months = Math.floor(interval);
+            const days = Math.floor((interval - months) * 30);
+            return days > 0 ? `${months}mo ${days}d` : `${months}mo`;
+          }
+
+          interval = seconds / 86400;
+          if (interval > 1) {
+            const days = Math.floor(interval);
+            const hours = Math.floor((interval - days) * 24);
+            return hours > 0 ? `${days}d ${hours}h` : `${days}d`;
+          }
+
+          interval = seconds / 3600;
+          if (interval > 1) {
+            const hours = Math.floor(interval);
+            const minutes = Math.floor((interval - hours) * 60);
+            return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+          }
+
+          interval = seconds / 60;
+          if (interval > 1) {
+            const minutes = Math.floor(interval);
+            const remainingSeconds = Math.floor((interval - minutes) * 60);
+            return remainingSeconds > 0 ? `${minutes}m ${remainingSeconds}s` : `${minutes}m`;
+          }
+
+          return Math.floor(seconds) + "s";
+        }
+
+        let timeToDisplay = 'N/A';
+        if (type === 'Pod') {
+          timeToDisplay = item.startTime ? timeAgo(item.startTime) : 'N/A';
+        } else if (type === 'ReplicaSet') {
+          timeToDisplay = item.creationTime ? timeAgo(item.creationTime) : 'N/A';
+        } else {
+          timeToDisplay = item.lastUpdateTime ? timeAgo(item.lastUpdateTime) : '';
+        }
+
+        function formatHelmTime(helmTime) {
+          if (!helmTime || helmTime === '0001-01-01T00:00:00Z') {
+            return '';
+          }
+          return timeAgo(helmTime);
+        }
+
+        const row = `<tr class="${groupClass}">
+          <td class="level-${level}"><nobr>${prefix}${type}</nobr></td>
+          <td><nobr>${item.name}</nobr></td>
+          <td>${highlightImageTags(item.images)}</td>
+          <td class="${statusClass}">${statusOrReadyReplicas}</td>
+          <td><nobr>${formatHelmTime(item.helmControllerTime)}</nobr></td>
+          <td><nobr>${timeToDisplay}</nobr></td>
+        </tr>`;
+
+        tableBody.insertAdjacentHTML('beforeend', row);
+      }
+
+      // Process and display data
+      data.deployments.forEach(deployment => {
+        addRow('Deployment', deployment, 0, 'group-deployment');
+        data.replica_sets.forEach(replicaSet => {
+          if (replicaSet.owner === deployment.name) {
+            addRow('ReplicaSet', replicaSet, 1, 'group-deployment');
+            data.pods.forEach(pod => {
+              if (pod.owner === replicaSet.name && pod.ownerKind === "ReplicaSet") {
+                addRow('Pod', pod, 2, 'group-deployment');
+              }
+            });
+          }
+        });
+        addEmptyRow();
+      });
+
+      data.stateful_sets.forEach(statefulSet => {
+        addRow('StatefulSet', statefulSet, 0, 'group-statefulset');
+        data.pods.forEach(pod => {
+          if (pod.owner === statefulSet.name && pod.ownerKind === "StatefulSet") {
+            addRow('Pod', pod, 1, 'group-statefulset');
+          }
+        });
+        addEmptyRow();
+      });
+
+      data.pods.forEach(pod => {
+        if (!pod.owner) {
+          addRow('Pod', pod, 0, 'group-standalone-pod');
+        }
+      });
+
+    } catch (err) {
+      console.error('Error fetching workloads:', err);
+    }
+  }
+
+  window.onload = function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const namespace = urlParams.get('namespace') || 'default';
+    fetchAndDisplayWorkloads(namespace);
+  };
+</script>
+</body>
+</html>
