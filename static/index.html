@@ -1,0 +1,2322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kubernetes Workloads Viewer</title>
+
+<!-- External Dependencies -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/tokyo-night-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
+<script>hljs.configure({ languages: ['yaml'], ignoreUnescapedHTML: true });</script>
+
+<!-- Application Styles -->
+<style>
+  /* CSS Variables and Theme Configuration */
+  :root {
+    /* Modern minimal color palette */
+    --primary-color: #4f46e5;
+    --primary-hover: #4338ca;
+    --primary-light: rgba(79, 70, 229, 0.1);
+    --success-color: #059669;
+    --warning-color: #d97706;
+    --error-color: #dc2626;
+
+    /* Light theme */
+    --bg-primary: #ffffff;
+    --bg-secondary: #fafafa;
+    --bg-tertiary: #f4f4f5;
+    --text-primary: #18181b;
+    --text-secondary: #71717a;
+    --border-color: #e4e4e7;
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow-md: 0 2px 4px 0 rgb(0 0 0 / 0.05);
+    --shadow-lg: 0 4px 6px -1px rgb(0 0 0 / 0.05);
+  }
+
+  /* Dark theme support */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg-primary: #18181b;
+      --bg-secondary: #27272a;
+      --bg-tertiary: #3f3f46;
+      --text-primary: #fafafa;
+      --text-secondary: #a1a1aa;
+      --border-color: #3f3f46;
+    }
+  }
+
+  /* Base Styles */
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    line-height: 1.5;
+    color: var(--text-primary);
+    background-color: var(--bg-secondary);
+  }
+
+  .container {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 1.5rem;
+  }
+
+  .header {
+    background-color: var(--bg-primary);
+    border-bottom: 1px solid var(--border-color);
+    padding: 0.5rem 0;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    backdrop-filter: blur(8px);
+  }
+
+  .header-content {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .header-group {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+  }
+
+  .namespace-select {
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 0.375rem;
+    padding: 0.375rem 0.5rem;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    height: 32px;
+    min-width: 160px;
+  }
+
+  .search-box {
+    position: relative;
+    flex: 1;
+    min-width: 200px;
+  }
+
+  .search-box input {
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    border-radius: 0.375rem;
+    padding: 0.375rem 0.75rem 0.375rem 2rem;
+    font-size: 0.875rem;
+    height: 32px;
+  }
+
+  .search-icon {
+    position: absolute;
+    left: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-secondary);
+    pointer-events: none;
+  }
+
+  .sort-button,
+  .filter-button {
+    padding: 0.375rem 0.75rem;
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 0.375rem;
+    font-size: 0.75rem;
+    color: var(--text-primary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    height: 32px;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+  }
+
+  .sort-button:hover,
+  .filter-button:hover {
+    background-color: var(--bg-primary);
+  }
+
+  .sort-button.active,
+  .filter-button.active {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+  }
+
+  .sort-button svg {
+    transition: transform 0.2s ease;
+  }
+
+  .sort-button.active svg {
+    transform: rotate(180deg);
+  }
+
+  .workloads-grid {
+    display: grid;
+    gap: 1rem;
+    margin-top: 1.5rem;
+  }
+
+  .workload-group {
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 1rem;
+    overflow: hidden;
+    transition: all 0.2s ease;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .workload-group:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+  }
+
+  .workload-group-header {
+    background-color: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-color);
+    padding: 0.25rem 0.75rem;
+  }
+
+  .workload-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .workload-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+    min-width: 0;
+    flex-wrap: wrap;
+    row-gap: 0.5rem;
+}
+
+.workload-type {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    font-weight: 600;
+    min-width: 80px;
+    flex-shrink: 0;
+}
+
+.workload-name {
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 300px;
+}
+
+.workload-info-container {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+    min-width: 0;
+    flex-wrap: wrap;
+    row-gap: 0.5rem;
+}
+
+.workload-images {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+    row-gap: 0.25rem;
+    min-width: 0;
+}
+
+.workload-buttons {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    row-gap: 0.5rem;
+}
+
+.image-tag {
+    display: inline-flex;
+    align-items: center;
+    background-color: var(--primary-light);
+    color: var(--primary-color);
+    padding: 0.25rem 0.375rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.workload-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.workload-time {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    margin-left: 0.75rem;
+}
+
+.yaml-button,
+.logs-button,
+.events-button {
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-weight: 500;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border: none;
+    cursor: pointer;
+    height: 32px;
+  }
+
+  .yaml-button {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    transition: all 0.2s ease;
+  }
+
+  .yaml-button:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+    background-color: var(--bg-primary);
+  }
+
+  .logs-button {
+    background-color: var(--primary-color);
+    color: white;
+  }
+
+  .logs-button:hover {
+    background-color: var(--primary-hover);
+  }
+
+  .events-button {
+    background-color: var(--warning-color);
+    color: white;
+    padding: 0.5rem 1rem;
+  }
+
+  .events-button:hover {
+    filter: brightness(110%);
+  }
+
+  .workload-group-content {
+    padding: 0.25rem;
+  }
+
+  .workload-card {
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    padding: 0.625rem;
+    margin: 0.25rem;
+    transition: all 0.2s ease;
+  }
+
+  .workload-card:hover {
+    box-shadow: var(--shadow-sm);
+  }
+
+  .workload-card.child {
+    margin-left: 1.5rem;
+    border-left: 2px solid var(--primary-color);
+  }
+
+  .workload-card.grandchild {
+    margin-left: 3rem;
+    border-left: 2px solid var(--primary-color);
+  }
+
+  .workload-status {
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.375rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+  }
+
+  .status-running {
+    background-color: rgba(5, 150, 105, 0.1);
+    color: var(--success-color);
+  }
+
+  .status-error {
+    background-color: rgba(220, 38, 38, 0.1);
+    color: var(--error-color);
+  }
+
+  .status-pending {
+    background-color: rgba(217, 119, 6, 0.1);
+    color: var(--warning-color);
+  }
+
+  .replicas-count {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+    font-size: 0.75rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .replicas-count::before {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin-right: 0.25rem;
+  }
+
+  .status-running .replicas-count::before {
+    background-color: var(--success-color);
+  }
+
+  .status-error .replicas-count::before {
+    background-color: var(--error-color);
+  }
+
+  .status-pending .replicas-count::before {
+    background-color: var(--warning-color);
+  }
+
+  .status-tooltip {
+    position: relative;
+    cursor: help;
+  }
+
+  .status-tooltip:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: 0;
+    top: 100%;
+    margin-top: 5px;
+    background: var(--text-primary);
+    color: var(--bg-primary);
+    padding: 0.5rem;
+    border-radius: 0.375rem;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    z-index: 10;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    max-width: 300px;
+    white-space: normal;
+  }
+
+  .workload-info {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border-color);
+  }
+
+  .info-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .info-item.right-align {
+    margin-left: auto;
+  }
+
+  .info-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .info-value {
+    font-size: 0.75rem;
+    color: var(--text-primary);
+  }
+
+  .image-tag {
+    display: inline-flex;
+    align-items: center;
+    background-color: var(--primary-light);
+    color: var(--primary-color);
+    padding: 0.25rem 0.375rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .image-tag.mismatch {
+    background-color: rgba(245, 158, 11, 0.1);
+    color: var(--warning-color);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+  }
+
+  .loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 200px;
+    color: var(--text-secondary);
+  }
+
+  .error {
+    background-color: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    color: var(--error-color);
+    margin: 1rem 0;
+  }
+
+  .error.hidden {
+    display: none;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  .loading-pulse {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-secondary);
+  }
+
+  .loading-pulse::after {
+    content: '';
+    width: 1rem;
+    height: 1rem;
+    border-radius: 50%;
+    border: 2px solid var(--text-secondary);
+    border-top-color: transparent;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .filter-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 0.25rem;
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 0.375rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    z-index: 20;
+    min-width: 150px;
+    display: none;
+  }
+
+  .filter-dropdown.show {
+    display: block;
+  }
+
+  .filter-option {
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .filter-option:hover {
+    background-color: var(--bg-tertiary);
+  }
+
+  .filter-option.active {
+    background-color: var(--primary-color);
+    color: white;
+  }
+
+  .filter-button.active {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+  }
+
+  @media (max-width: 1024px) {
+    .header-content {
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .header-group {
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .namespace-select {
+      width: 100%;
+    }
+
+    .search-box {
+      min-width: 100%;
+    }
+  }
+
+  /* Modal styles */
+  .modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    overflow-y: auto;
+    padding: 2rem 1rem;
+  }
+
+  .modal-content {
+    position: relative;
+    background-color: var(--bg-primary);
+    margin: 0 auto;
+    padding: 1.25rem;
+    width: 90%;
+    max-width: 1200px;
+    border-radius: 0.5rem;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-md);
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 4rem);
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 0.75rem;
+    margin-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .modal-title {
+    color: var(--text-primary);
+    font-size: 1.125rem;
+    font-weight: 500;
+  }
+
+  .modal-close {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0.5rem;
+    margin: -0.5rem;
+    border-radius: 0.375rem;
+    transition: all 0.2s ease;
+  }
+
+  .modal-close:hover {
+    color: var(--text-primary);
+    background-color: var(--bg-tertiary);
+  }
+
+  .modal-body {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+    background-color: var(--bg-primary);
+    border-radius: 0.375rem;
+  }
+
+  .modal-body pre {
+    margin: 0;
+    padding: 1rem;
+    background-color: var(--bg-tertiary);
+    border-radius: 0.5rem;
+    overflow-x: auto;
+  }
+
+  .modal-body code {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+
+  /* Logs modal specific styles */
+  .logs-modal .modal-content {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+  }
+
+  .logs-content {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    overflow-x: auto;
+    padding: 1rem;
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+    border-radius: 0.375rem;
+    height: 100%;
+    min-height: 200px;
+    max-height: calc(100vh - 12rem);
+  }
+
+  .logs-toolbar {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background-color: var(--bg-tertiary);
+    border-radius: 0.375rem;
+    align-items: center;
+  }
+
+  .logs-toolbar select,
+  .logs-toolbar input {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 0.25rem;
+    padding: 0.375rem 0.5rem;
+    font-size: 0.875rem;
+    height: 32px;
+    min-width: 120px;
+  }
+
+  .logs-toolbar button {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 0.25rem;
+    padding: 0.375rem 0.75rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+    height: 32px;
+    transition: background-color 0.2s ease;
+  }
+
+  .logs-toolbar button:hover {
+    background-color: var(--primary-hover);
+  }
+
+  /* Events table styles */
+  .events-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 0.5rem;
+  }
+
+  .events-table th,
+  .events-table td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 0.875rem;
+  }
+
+  .events-table th {
+    background-color: var(--bg-tertiary);
+    color: var(--text-secondary);
+    font-weight: 500;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+
+  .events-table tr:hover td {
+    background-color: var(--bg-tertiary);
+  }
+
+  .event-type {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-weight: 500;
+    font-size: 0.75rem;
+  }
+
+  .event-type.normal {
+    background-color: rgba(5, 150, 105, 0.1);
+    color: var(--success-color);
+  }
+
+  .event-type.warning {
+    background-color: rgba(217, 119, 6, 0.1);
+    color: var(--warning-color);
+  }
+
+  .event-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.5rem;
+    height: 1.5rem;
+    padding: 0 0.375rem;
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+
+  .events-count {
+    background-color: rgba(255, 255, 255, 0.2);
+    padding: 0.125rem 0.375rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    min-width: 1.5rem;
+    text-align: center;
+    display: inline-block;
+  }
+
+  /* YAML styles */
+  .hljs {
+    background: var(--bg-tertiary) !important;
+    color: var(--text-primary) !important;
+  }
+
+  .hljs-attr {
+    color: var(--primary-color) !important;
+  }
+
+  .hljs-string {
+    color: var(--success-color) !important;
+  }
+
+  .hljs-number {
+    color: var(--warning-color) !important;
+  }
+
+  .hljs-literal {
+    color: var(--primary-hover) !important;
+  }
+
+  .hljs-comment {
+    color: var(--text-secondary) !important;
+  }
+
+  .resource-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border-color);
+  }
+
+  .resource-bar {
+    display: grid;
+    grid-template-columns: 120px 1fr 1fr;
+    gap: 1rem;
+    position: relative;
+    align-items: center;
+    height: 24px;
+  }
+
+  .resource-name {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .resource-metric {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    position: relative;
+    min-width: 200px;
+  }
+
+  .resource-value {
+    font-size: 0.75rem;
+    color: var(--text-primary);
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+    min-width: 45px;
+  }
+
+  .resource-progress {
+    flex: 1;
+    height: 6px;
+    background-color: var(--bg-tertiary);
+    border-radius: 3px;
+    position: relative;
+    overflow: visible;
+  }
+
+  .resource-progress-bar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    background-color: #7c3aed;
+    border-radius: 3px;
+    transition: width 0.3s ease;
+  }
+
+  .resource-progress-bar.warning {
+    background-color: var(--warning-color);
+  }
+
+  .resource-progress-bar.critical {
+    background-color: var(--error-color);
+  }
+
+  .resource-progress-request {
+    position: absolute;
+    width: 2px;
+    height: 200%;
+    background-color: rgba(255, 255, 255, 0.8);
+    top: -50%;
+    z-index: 2;
+    border-radius: 1px;
+  }
+
+  .resource-progress-limit {
+    position: absolute;
+    width: 2px;
+    height: 200%;
+    background-color: rgba(255, 255, 255, 0.8);
+    top: -50%;
+    z-index: 2;
+    border-radius: 1px;
+  }
+
+  .resource-progress-background {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    width: 100%;
+    background-color: var(--bg-tertiary);
+    opacity: 0.3;
+  }
+
+  .resource-progress-request-zone {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    background-color: rgba(99, 102, 241, 0.15);
+    transition: width 0.3s ease;
+  }
+
+  .resource-tooltip {
+    position: absolute;
+    top: -48px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.8);
+    color: #fff;
+    padding: 0.5rem;
+    border-radius: 0.375rem;
+    font-size: 0.75rem;
+    white-space: pre;
+    z-index: 50;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+  }
+
+  .resource-tooltip .warning {
+    color: #fbbf24;
+  }
+
+  .resource-metric:hover .resource-tooltip {
+    opacity: 1;
+  }
+
+  .resource-value-item-placeholder {
+    width: 60px;
+    height: 24px;
+  }
+
+  .resource-value-item:hover {
+    background-color: var(--bg-tertiary);
+  }
+
+  .resource-value-item.request-value {
+    right: 60px;
+  }
+
+  .resource-value-item.limit-value {
+    right: 0;
+  }
+
+  .resource-value-item:only-child {
+    right: 0;
+  }
+
+  .resource-value-item:hover {
+    background-color: var(--bg-tertiary);
+  }
+
+  /* Add port button styles after .events-button styles */
+  .port-button {
+    background-color: #0ea5e9;
+    color: white;
+    padding: 0.375rem 0.75rem;
+    border-radius: 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s ease;
+    height: 28px;
+    white-space: nowrap;
+  }
+
+  .port-button > span:not(.port-number):not(.tooltip) {
+    text-transform: uppercase;
+  }
+
+  .port-button:hover {
+    background-color: #0284c7;
+  }
+
+  .port-button .port-number {
+    background-color: rgba(255, 255, 255, 0.2);
+    padding: 0.125rem 0.375rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    min-width: 1.5rem;
+    text-align: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .tooltip {
+    position: absolute;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    padding: 0.5rem;
+    border-radius: 0.375rem;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    z-index: 50;
+    box-shadow: var(--shadow-md);
+    border: 1px solid var(--border-color);
+    display: none;
+    max-width: 300px;
+    white-space: normal;
+  }
+
+  .port-button:hover .tooltip {
+    display: block;
+  }
+</style>
+</head>
+
+<body>
+<!-- Header Section -->
+<header class="header">
+  <div class="container header-content">
+    <div class="header-group">
+      <select id="namespaceSelect" class="namespace-select">
+        <option value="">Loading namespaces...</option>
+      </select>
+      <div class="search-box">
+        <svg class="search-icon" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <input type="text" id="searchInput" placeholder="Search workloads..." />
+      </div>
+      <button class="sort-button" id="sortButton">
+        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+        </svg>
+        <span class="sort-text">Newest first</span>
+      </button>
+      <div style="position: relative;">
+        <button class="filter-button" id="typeFilter">
+          <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+          </svg>
+          Filter by type
+        </button>
+        <div class="filter-dropdown" id="typeDropdown">
+          <div class="filter-option" data-type="all">All types</div>
+          <div class="filter-option" data-type="Deployment">Deployments</div>
+          <div class="filter-option" data-type="StatefulSet">StatefulSets</div>
+        </div>
+      </div>
+      <div style="position: relative;">
+        <button class="filter-button" id="statusFilter">
+          <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          Filter by status
+        </button>
+        <div class="filter-dropdown" id="statusDropdown">
+          <div class="filter-option" data-status="all">All statuses</div>
+          <div class="filter-option" data-status="running">Running</div>
+          <div class="filter-option" data-status="error">Error</div>
+          <div class="filter-option" data-status="events">Has Events</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- Main Content -->
+<main class="container">
+  <div id="errorContainer" class="error hidden"></div>
+  <div id="workloadsContainer" class="workloads-grid"></div>
+</main>
+
+<!-- Modals -->
+<div id="yamlModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <div class="modal-title">YAML Manifest</div>
+      <button class="modal-close" type="button">
+        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <pre><code class="language-yaml" id="yamlContent"></code></pre>
+    </div>
+  </div>
+</div>
+
+<div id="logsModal" class="modal logs-modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <div class="modal-title">Container Logs</div>
+      <button class="modal-close" type="button">
+        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+    <div class="logs-toolbar">
+      <select id="containerSelect">
+        <option value="">Loading containers...</option>
+      </select>
+      <input type="number" id="tailLines" value="100" min="1" max="10000" step="100" />
+      <button onclick="refreshLogs()">Refresh</button>
+    </div>
+    <div class="modal-body">
+      <div id="logsContent" class="logs-content">Loading logs...</div>
+    </div>
+  </div>
+</div>
+
+<!-- Application Scripts -->
+<script>
+// Constants and State
+const EVENTS_CACHE_TIMEOUT = 10000; // 10 seconds cache
+let workloadsData = null;
+let sortByTimeDesc = true;
+let currentTypeFilter = 'all';
+let currentStatusFilter = 'all';
+let currentPodName = '';
+let eventsCheckQueue = new Map();
+let eventsCheckTimeout;
+let eventsCheckCache = new Map();
+
+// DOM Elements
+const searchInput = document.getElementById('searchInput');
+const typeFilter = document.getElementById('typeFilter');
+const statusFilter = document.getElementById('statusFilter');
+const workloadsContainer = document.getElementById('workloadsContainer');
+const errorContainer = document.getElementById('errorContainer');
+const yamlContent = document.getElementById('yamlContent');
+const logsModal = document.getElementById('logsModal');
+const containerSelect = document.getElementById('containerSelect');
+const tailLines = document.getElementById('tailLines');
+const logsContent = document.getElementById('logsContent');
+const sortButton = document.getElementById('sortButton');
+const sortText = sortButton.querySelector('.sort-text');
+
+// Utility Functions
+function getCurrentNamespace() {
+    return document.getElementById('namespaceSelect').value || 'default';
+}
+
+function showError(message) {
+    errorContainer.textContent = message;
+    errorContainer.classList.remove('hidden');
+}
+
+function hideError() {
+    errorContainer.classList.add('hidden');
+}
+
+function showLoading() {
+    if (!workloadsData) {
+        workloadsContainer.innerHTML = '<div class="loading"><div class="loading-pulse">Loading workloads...</div></div>';
+    }
+}
+
+// Data Management
+const dataManager = {
+    async fetchWorkloads(namespace, isRefresh = false) {
+        try {
+            if (!isRefresh) {
+                showLoading();
+            }
+            hideError();
+
+            const res = await fetch(`/api/workloads/${namespace}`);
+            if (!res.ok) throw new Error(`Failed to fetch workloads: ${res.statusText}`);
+
+            const data = await res.json();
+            if (!data) throw new Error('No data received from server');
+
+            workloadsData = data;
+            this.renderWorkloads(workloadsData);
+
+            if (isRefresh) {
+                filterWorkloads();
+                document.getElementById('sortButton').classList.toggle('active', !sortByTimeDesc);
+            }
+
+            const workloadCards = document.querySelectorAll('.workload-card');
+            workloadCards.forEach(card => {
+                const type = card.dataset.type;
+                const name = card.dataset.name;
+                eventsQueue.add(type, name);
+            });
+
+            return Promise.resolve(); // Explicitly return a resolved promise
+
+        } catch (err) {
+            if (!isRefresh) {
+                showError(`Error: ${err.message}`);
+                workloadsContainer.innerHTML = '';
+            } else {
+                console.error('Error refreshing workloads:', err);
+            }
+            return Promise.reject(err); // Return rejected promise on error
+        }
+    },
+
+    async loadNamespaces() {
+        try {
+            const response = await fetch('/api/namespaces');
+            if (!response.ok) throw new Error(`Failed to fetch namespaces: ${response.statusText}`);
+
+            const namespaces = await response.json();
+            const currentNamespace = new URLSearchParams(window.location.search).get('namespace') || 'default';
+
+            namespaces.sort((a, b) => a.name.localeCompare(b.name));
+            this.updateNamespaceSelect(namespaces, currentNamespace);
+            this.fetchWorkloads(currentNamespace);
+        } catch (error) {
+            console.error('Error loading namespaces:', error);
+            showError(`Failed to load namespaces: ${error.message}`);
+        }
+    },
+
+    updateNamespaceSelect(namespaces, currentNamespace) {
+        const namespaceSelect = document.getElementById('namespaceSelect');
+        namespaceSelect.innerHTML = namespaces.map(ns =>
+            `<option value="${ns.name}" ${ns.name === currentNamespace ? 'selected' : ''}>${ns.name}</option>`
+        ).join('');
+    },
+
+    renderWorkloads(data) {
+        workloadsContainer.innerHTML = '';
+
+        const safeData = {
+            deployments: Array.isArray(data?.deployments) ? data.deployments : [],
+            replica_sets: Array.isArray(data?.replica_sets) ? data.replica_sets : [],
+            stateful_sets: Array.isArray(data?.stateful_sets) ? data.stateful_sets : [],
+            pods: Array.isArray(data?.pods) ? data.pods : []
+        };
+
+        const workloadGroups = [];
+
+        // Process Deployments
+        safeData.deployments.forEach(deployment => {
+            const relatedReplicaSets = safeData.replica_sets.filter(rs => rs.owner === deployment.name);
+            const relatedPods = safeData.pods.filter(pod =>
+                relatedReplicaSets.some(rs => pod.owner === rs.name && pod.ownerKind === "ReplicaSet")
+            );
+            workloadGroups.push({
+                type: 'Deployment',
+                mainItem: deployment,
+                pods: relatedPods,
+                updateTime: utils.getUpdateTime(deployment)
+            });
+        });
+
+        // Process StatefulSets
+        safeData.stateful_sets.forEach(statefulSet => {
+            const relatedPods = safeData.pods.filter(pod =>
+                pod.owner === statefulSet.name && pod.ownerKind === "StatefulSet"
+            );
+            workloadGroups.push({
+                type: 'StatefulSet',
+                mainItem: statefulSet,
+                pods: relatedPods,
+                updateTime: utils.getUpdateTime(statefulSet)
+            });
+        });
+
+        // Sort groups by update time
+        workloadGroups.sort((a, b) => sortByTimeDesc ? b.updateTime - a.updateTime : a.updateTime - b.updateTime);
+
+        if (workloadGroups.length === 0 && safeData.pods.length === 0) {
+            workloadsContainer.innerHTML = `
+                <div class="workload-group">
+                    <div class="workload-group-header">
+                        <div class="workload-type">No workloads found</div>
+                    </div>
+                    <div class="workload-group-content">
+                        <div class="workload-card">
+                            <div class="workload-header">
+                                <div class="workload-title">No resources found in this namespace</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            return;
+        }
+
+        // Render sorted groups
+        workloadGroups.forEach(group => {
+            workloadsContainer.insertAdjacentHTML('beforeend',
+                renderer.workloadGroup(group.type, group.mainItem, group.pods)
+            );
+        });
+
+        // Render standalone pods
+        const standalonePods = safeData.pods.filter(pod => !pod.owner);
+        if (standalonePods.length > 0) {
+            const podsHtml = standalonePods
+                .sort((a, b) => sortByTimeDesc ? utils.getUpdateTime(b) - utils.getUpdateTime(a) : utils.getUpdateTime(a) - utils.getUpdateTime(b))
+                .map(pod => renderer.workload('Pod', pod))
+                .join('');
+            workloadsContainer.insertAdjacentHTML('beforeend', `
+                <div class="workload-group">
+                    <div class="workload-group-header">
+                        <div class="workload-type">Standalone Pods</div>
+                    </div>
+                    <div class="workload-group-content">
+                        ${podsHtml}
+                    </div>
+                </div>
+            `);
+        }
+
+        // Clear existing queue and timeout
+        eventsQueue.clear();
+    }
+};
+
+// Rendering Functions
+const renderer = {
+    workloadGroup(type, mainItem, pods = []) {
+        const statusClass = utils.getStatusClass(type, mainItem);
+        const updateTime = utils.getUpdateTime(mainItem);
+
+        return `
+            <div class="workload-group" data-type="${type}" data-name="${mainItem.name}" data-time="${updateTime}">
+                <div class="workload-group-header">
+                    <div class="workload-header">
+                        <div class="workload-title">
+                            <span class="workload-type">${type}</span>
+                            <span class="workload-name">${mainItem.name}</span>
+                            <div class="workload-images">
+                                ${mainItem.images ? mainItem.images.map(image => {
+                                    const [name, tag] = image.split(':');
+                                    const cleanName = name.replace('295677272797.dkr.ecr.eu-central-1.amazonaws.com/', '');
+                                    return `<div class="image-tag">${cleanName}:${tag}</div>`;
+                                }).join('') : 'N/A'}
+                            </div>
+                        </div>
+                        <div class="workload-actions">
+                            <button class="yaml-button" onclick="modalManager.showYamlManifest('${type}', '${mainItem.name}')">YAML</button>
+                            <div id="events-button-${type}-${mainItem.name}"></div>
+                            <div class="workload-status ${statusClass}">
+                                <span class="replicas-count">${utils.getReplicasStatus(type, mainItem)}</span>
+                            </div>
+                            <span class="workload-time">${utils.formatTimeAgo(mainItem.lastUpdateTime || mainItem.startTime || mainItem.creationTime)}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="workload-group-content">
+                    ${pods.map(pod => this.workload('Pod', pod, 1)).join('')}
+                </div>
+            </div>
+        `;
+    },
+
+    workload(type, item, level = 0) {
+        const statusClass = utils.getStatusClass(type, item);
+        const levelClass = level === 1 ? 'child' : '';
+        const logsButton = type === 'Pod' ?
+            `<button class="logs-button" onclick="modalManager.showLogs('${item.name}')">LOGS</button>` : '';
+
+        const statusTooltip = type === 'Pod' && item.statusMessage ?
+            `data-tooltip="${item.statusMessage}"` : '';
+        const statusElement = type === 'Pod' ?
+            `<div class="workload-status ${statusClass}${item.statusMessage ? ' status-tooltip' : ''}" ${statusTooltip}>${item.status}</div>` :
+            `<div class="workload-status ${statusClass}"><span class="replicas-count">${utils.getReplicasStatus(type, item)}</span></div>`;
+
+        const resourceBars = type === 'Pod' ? this.resourceBars(item) : '';
+        const portButtons = type === 'Pod' ? this.portButtons(item) : '';
+
+        // Get parent deployment images if this is a pod
+        let parentImages = [];
+        if (type === 'Pod' && item.ownerKind === 'ReplicaSet') {
+            const replicaSet = workloadsData.replica_sets.find(rs => rs.name === item.owner);
+            if (replicaSet && replicaSet.owner) {
+                const deployment = workloadsData.deployments.find(d => d.name === replicaSet.owner);
+                if (deployment) {
+                    parentImages = deployment.images;
+                }
+            }
+        }
+
+        // Render images with mismatch detection
+        const imagesHtml = item.images ? item.images.map(image => {
+            const [name, tag] = image.split(':');
+            const cleanName = name.replace('295677272797.dkr.ecr.eu-central-1.amazonaws.com/', '');
+            const isMismatch = type === 'Pod' && parentImages.length > 0 && !parentImages.includes(image);
+            return `<div class="image-tag${isMismatch ? ' mismatch' : ''}" title="${isMismatch ? 'Pod is running an outdated or different image version than specified in deployment' : ''}">${cleanName}:${tag}</div>`;
+        }).join('') : 'N/A';
+
+        return `
+            <div class="workload-card ${levelClass}" data-type="${type}" data-name="${item.name}">
+                <div class="workload-header">
+                    <div class="workload-title">
+                        <span class="workload-type">${type}</span>
+                        <span class="workload-name">${item.name}</span>
+                        <div class="workload-info-container">
+                            <div class="workload-images">
+                                ${imagesHtml}
+                            </div>
+                            <div class="workload-buttons">
+                                ${portButtons}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="workload-actions">
+                        ${type !== 'Pod' ? `<button class="yaml-button" onclick="modalManager.showYamlManifest('${type}', '${item.name}')">YAML</button>` : ''}
+                        ${logsButton}
+                        <div id="events-button-${type}-${item.name}"></div>
+                        ${statusElement}
+                        <span class="workload-time">${utils.formatTimeAgo(item.lastUpdateTime || item.startTime || item.creationTime)}</span>
+                    </div>
+                </div>
+                ${resourceBars}
+            </div>
+        `;
+    },
+
+    resourceBars(pod) {
+        if (!pod.containers || pod.containers.length === 0) return '';
+
+        return `<div class="resource-bars">
+            ${pod.containers.map(container => {
+                const cpuRequest = utils.parseCPU(container.resources?.requests?.cpu);
+                const cpuLimit = utils.parseCPU(container.resources?.limits?.cpu);
+                const cpuUsage = utils.parseCPU(container.resources?.usage?.cpu);
+                const memRequest = utils.parseMemory(container.resources?.requests?.memory);
+                const memLimit = utils.parseMemory(container.resources?.limits?.memory);
+                const memUsage = utils.parseMemory(container.resources?.usage?.memory);
+
+                const cpuUsagePercent = cpuLimit ? (cpuUsage / cpuLimit) * 100 : 0;
+                const memUsagePercent = memLimit ? (memUsage / memLimit) * 100 : 0;
+                const cpuRequestPercent = cpuLimit ? (cpuRequest / cpuLimit) * 100 : 0;
+                const memRequestPercent = memLimit ? (memRequest / memLimit) * 100 : 0;
+
+                // Calculate percentages relative to requests
+                const cpuRequestUsagePercent = cpuRequest ? Math.round((cpuUsage / cpuRequest) * 100) : 0;
+                const memRequestUsagePercent = memRequest ? Math.round((memUsage / memRequest) * 100) : 0;
+
+                // Determine bar colors based on usage
+                const getCpuBarClass = () => {
+                    if (cpuLimit && cpuUsage >= cpuLimit) return 'critical';
+                    if (cpuRequest && cpuUsage >= cpuRequest) return 'warning';
+                    return '';
+                };
+
+                const getMemBarClass = () => {
+                    if (memLimit && memUsage >= memLimit) return 'critical';
+                    if (memRequest && memUsage >= memRequest) return 'warning';
+                    return '';
+                };
+
+                let cpuTooltip = [];
+                if (!cpuRequest && !cpuLimit) {
+                    cpuTooltip.push('Missing Requests', 'Missing Limits');
+                } else {
+                    if (cpuRequest) {
+                        cpuTooltip.push(`${cpuRequestUsagePercent}% of ${utils.formatCPU(cpuRequest)} requested`);
+                    } else {
+                        cpuTooltip.push('Missing Requests');
+                    }
+                    if (cpuLimit) {
+                        cpuTooltip.push(`${Math.round((cpuUsage / cpuLimit) * 100)}% of ${utils.formatCPU(cpuLimit)} limit`);
+                    } else {
+                        cpuTooltip.push('Missing Limits');
+                    }
+                }
+
+                let memTooltip = [];
+                if (!memRequest && !memLimit) {
+                    memTooltip.push('Missing Requests', 'Missing Limits');
+                } else {
+                    if (memRequest) {
+                        memTooltip.push(`${memRequestUsagePercent}% of ${utils.formatMemory(memRequest)} requested`);
+                    } else {
+                        memTooltip.push('Missing Requests');
+                    }
+                    if (memLimit) {
+                        memTooltip.push(`${Math.round((memUsage / memLimit) * 100)}% of ${utils.formatMemory(memLimit)} limit`);
+                    } else {
+                        memTooltip.push('Missing Limits');
+                    }
+                }
+
+                return `
+                    <div class="resource-bar">
+                        <div class="resource-name">${container.name}</div>
+                        <div class="resource-metric">
+                            <div style="color: var(--text-secondary); font-size: 0.75rem; margin-right: 0.5rem;">CPU</div>
+                            <div class="resource-value">${utils.formatCPU(cpuUsage)}</div>
+                            <div class="resource-progress">
+                                <div class="resource-progress-background"></div>
+                                ${cpuRequest ? `<div class="resource-progress-request-zone" style="width: ${cpuRequestPercent}%"></div>` : ''}
+                                <div class="resource-progress-bar ${getCpuBarClass()}" style="width: ${cpuUsagePercent}%"></div>
+                                ${cpuRequest ? `<div class="resource-progress-request" style="left: ${cpuRequestPercent}%"></div>` : ''}
+                                ${cpuLimit ? `<div class="resource-progress-limit" style="right: 0"></div>` : ''}
+                            </div>
+                            <div class="resource-tooltip">${cpuTooltip.map(text =>
+                                text.includes('Missing') ? `<span class="warning">${text}</span>` : text
+                            ).join('\n')}</div>
+                        </div>
+                        <div class="resource-metric">
+                            <div style="color: var(--text-secondary); font-size: 0.75rem; margin-right: 0.5rem;">MEM</div>
+                            <div class="resource-value">${utils.formatMemory(memUsage)}</div>
+                            <div class="resource-progress">
+                                <div class="resource-progress-background"></div>
+                                ${memRequest ? `<div class="resource-progress-request-zone" style="width: ${memRequestPercent}%"></div>` : ''}
+                                <div class="resource-progress-bar ${getMemBarClass()}" style="width: ${memUsagePercent}%"></div>
+                                ${memRequest ? `<div class="resource-progress-request" style="left: ${memRequestPercent}%"></div>` : ''}
+                                ${memLimit ? `<div class="resource-progress-limit" style="right: 0"></div>` : ''}
+                            </div>
+                            <div class="resource-tooltip">${memTooltip.map(text =>
+                                text.includes('Missing') ? `<span class="warning">${text}</span>` : text
+                            ).join('\n')}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('')}
+        </div>`;
+    },
+
+    portButtons(pod) {
+        if (!pod.containers || pod.containers.length === 0) return '';
+
+        const buttons = pod.containers.flatMap(container => {
+            if (!container.ports || container.ports.length === 0) return [];
+
+            return container.ports.map(port => {
+                const portForwardCmd = `kubectl port-forward -n ${getCurrentNamespace()} pod/${pod.name} ${port.containerPort}:${port.containerPort}`;
+                return `
+                    <button class="port-button" onclick="utils.copyPortForward('${portForwardCmd}')">
+                        <span>${port.name ? port.name : 'port'}</span>
+                        <span class="port-number">${port.containerPort}</span>
+                        <div class="tooltip">Click to copy: ${portForwardCmd}</div>
+                    </button>
+                `;
+            });
+        });
+
+        return buttons.join('');
+    }
+};
+
+// Event Handlers
+const eventHandlers = {
+    setupFilterHandlers() {
+        // Handle dropdowns
+        document.addEventListener('click', (e) => {
+            const typeDropdown = document.getElementById('typeDropdown');
+            const statusDropdown = document.getElementById('statusDropdown');
+
+            if (e.target.closest('#typeFilter')) {
+                typeDropdown.classList.toggle('show');
+                statusDropdown.classList.remove('show');
+            } else if (e.target.closest('#statusFilter')) {
+                statusDropdown.classList.toggle('show');
+                typeDropdown.classList.remove('show');
+            } else {
+                typeDropdown.classList.remove('show');
+                statusDropdown.classList.remove('show');
+            }
+        });
+
+        // Type filter options
+        document.querySelectorAll('#typeDropdown .filter-option').forEach(option => {
+            option.addEventListener('click', () => {
+                currentTypeFilter = option.dataset.type;
+                document.querySelectorAll('#typeDropdown .filter-option').forEach(opt => {
+                    opt.classList.toggle('active', opt === option);
+                });
+                document.getElementById('typeFilter').classList.toggle('active', currentTypeFilter !== 'all');
+                filterWorkloads();
+            });
+        });
+
+        // Status filter options
+        document.querySelectorAll('#statusDropdown .filter-option').forEach(option => {
+            option.addEventListener('click', () => {
+                currentStatusFilter = option.dataset.status;
+                document.querySelectorAll('#statusDropdown .filter-option').forEach(opt => {
+                    opt.classList.toggle('active', opt === option);
+                });
+                document.getElementById('statusFilter').classList.toggle('active', currentStatusFilter !== 'all');
+                filterWorkloads();
+            });
+        });
+
+        // Search input
+        searchInput.addEventListener('input', filterWorkloads);
+    },
+
+    setupSortHandler() {
+        const sortButton = document.getElementById('sortButton');
+        const sortText = sortButton.querySelector('.sort-text');
+
+        function updateSortButtonText() {
+            sortText.textContent = sortByTimeDesc ? 'Newest first' : 'Oldest first';
+        }
+
+        sortButton.addEventListener('click', () => {
+            sortByTimeDesc = !sortByTimeDesc;
+            sortButton.classList.toggle('active');
+            updateSortButtonText();
+            if (workloadsData) {
+                renderWorkloads(workloadsData);
+                filterWorkloads();
+            }
+        });
+
+        // Initialize sort button text
+        updateSortButtonText();
+    },
+
+    setupModalHandlers() {
+        modalManager.setupHandlers();
+    },
+
+    handleNamespaceChange(event) {
+        const namespace = event.target.value;
+        const url = new URL(window.location);
+        url.searchParams.set('namespace', namespace);
+        window.history.pushState({}, '', url);
+
+        // Save current filter state
+        const savedTypeFilter = currentTypeFilter;
+        const savedStatusFilter = currentStatusFilter;
+        const savedSearchTerm = searchInput.value;
+
+        dataManager.fetchWorkloads(namespace).then(() => {
+            // Restore filter state after data is loaded
+            currentTypeFilter = savedTypeFilter;
+            currentStatusFilter = savedStatusFilter;
+            searchInput.value = savedSearchTerm;
+
+            // Update UI to reflect restored filters
+            document.getElementById('typeFilter').classList.toggle('active', currentTypeFilter !== 'all');
+            document.getElementById('statusFilter').classList.toggle('active', currentStatusFilter !== 'all');
+
+            document.querySelectorAll('#typeDropdown .filter-option').forEach(opt => {
+                opt.classList.toggle('active', opt.dataset.type === currentTypeFilter);
+            });
+            document.querySelectorAll('#statusDropdown .filter-option').forEach(opt => {
+                opt.classList.toggle('active', opt.dataset.status === currentStatusFilter);
+            });
+
+            // Apply filters to the new data
+            filterWorkloads();
+        });
+    }
+};
+
+// Modal Management
+const modalManager = {
+    async showYamlManifest(type, name) {
+        const modal = document.getElementById('yamlModal');
+        if (!modal) return;
+
+        try {
+            const namespace = new URLSearchParams(window.location.search).get('namespace') || 'default';
+            const response = await fetch(`/api/manifest/${namespace}/${type.toLowerCase()}/${name}`);
+
+            if (!response.ok) {
+                throw new Error(`Failed to fetch manifest: ${response.statusText}`);
+            }
+
+            const yaml = await response.text();
+            modal.querySelector('.modal-title').textContent = `${type.toLowerCase()}/${name}`;
+
+            const yamlContent = document.getElementById('yamlContent');
+            yamlContent.innerHTML = '';
+            const codeElement = document.createElement('code');
+            codeElement.className = 'language-yaml';
+            codeElement.textContent = yaml;
+            yamlContent.appendChild(codeElement);
+            hljs.highlightElement(codeElement);
+
+            modal.style.display = 'block';
+        } catch (error) {
+            console.error('Error fetching manifest:', error);
+            showError(`Failed to fetch manifest: ${error.message}`);
+        }
+    },
+
+    async showLogs(podName) {
+        currentPodName = podName;
+        const namespace = new URLSearchParams(window.location.search).get('namespace') || 'default';
+
+        const logsModal = document.getElementById('logsModal');
+        logsModal.style.display = 'block';
+
+        const modalTitle = document.querySelector('#logsModal .modal-title');
+        modalTitle.textContent = `Logs pod/${podName}`;
+
+        try {
+            const pod = workloadsData.pods.find(p => p.name === podName);
+            if (pod && pod.containers && pod.containers.length > 0) {
+                containerSelect.innerHTML = pod.containers.map(container =>
+                    `<option value="${container.name}">${container.name}</option>`
+                ).join('');
+            } else {
+                containerSelect.innerHTML = '<option value="">No containers found</option>';
+            }
+
+            await this.refreshLogs();
+        } catch (error) {
+            console.error('Error showing logs:', error);
+            logsContent.textContent = `Error loading logs: ${error.message}`;
+        }
+    },
+
+    async refreshLogs() {
+        if (!currentPodName) return;
+
+        const namespace = new URLSearchParams(window.location.search).get('namespace') || 'default';
+        const container = containerSelect.value;
+        const tail = tailLines.value;
+
+        try {
+            logsContent.textContent = 'Loading logs...';
+
+            const params = new URLSearchParams({
+                tail: tail
+            });
+            if (container && container !== '') {
+                params.append('container', container);
+            }
+
+            const response = await fetch(`/api/logs/${namespace}/${currentPodName}?${params}`);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch logs: ${response.statusText}`);
+            }
+
+            const logs = await response.text();
+            logsContent.textContent = logs || 'No logs available';
+        } catch (error) {
+            console.error('Error fetching logs:', error);
+            logsContent.textContent = `Error: ${error.message}`;
+        }
+    },
+
+    async showEvents(type, name) {
+        try {
+            const namespace = new URLSearchParams(window.location.search).get('namespace') || 'default';
+            const response = await fetch(`/api/events/${namespace}/${type.toLowerCase()}/${name}`);
+
+            if (!response.ok) {
+                throw new Error(`Failed to fetch events: ${response.statusText}`);
+            }
+
+            const events = await response.json();
+
+            const existingModal = document.getElementById('eventsModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+
+            const eventsModal = document.createElement('div');
+            eventsModal.className = 'modal';
+            eventsModal.id = 'eventsModal';
+            eventsModal.innerHTML = `
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <div class="modal-title">Events ${type.toLowerCase()}/${name}</div>
+                        <button class="modal-close" onclick="modalManager.closeModal('eventsModal')">
+                            <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <table class="events-table">
+                            <thead>
+                                <tr>
+                                    <th>Type</th>
+                                    <th>Reason</th>
+                                    <th>Age</th>
+                                    <th>Count</th>
+                                    <th>Message</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${events.length === 0 ? `
+                                    <tr>
+                                        <td colspan="5" style="text-align: center;">No events found</td>
+                                    </tr>
+                                ` : events.map(event => `
+                                    <tr>
+                                        <td>
+                                            <span class="event-type ${event.type.toLowerCase()}">
+                                                ${event.type}
+                                            </span>
+                                        </td>
+                                        <td>${event.reason}</td>
+                                        <td>${utils.formatTimeAgo(event.lastSeen)}</td>
+                                        <td><span class="event-count">${event.count}</span></td>
+                                        <td>${event.message}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(eventsModal);
+            requestAnimationFrame(() => {
+                eventsModal.style.display = 'block';
+            });
+        } catch (error) {
+            console.error('Error fetching events:', error);
+            showError(`Failed to fetch events: ${error.message}`);
+        }
+    },
+
+    closeModal(modalId) {
+        const modal = document.getElementById(modalId);
+        if (!modal) return;
+
+        switch (modalId) {
+            case 'yamlModal':
+                modal.style.display = 'none';
+                const yamlContent = document.getElementById('yamlContent');
+                if (yamlContent) {
+                    yamlContent.innerHTML = '';
+                }
+                break;
+            case 'logsModal':
+                modal.style.display = 'none';
+                currentPodName = '';
+                const logsContent = document.getElementById('logsContent');
+                if (logsContent) {
+                    logsContent.textContent = '';
+                }
+                break;
+            case 'eventsModal':
+                modal.remove();
+                break;
+            default:
+                modal.style.display = 'none';
+        }
+    },
+
+    setupHandlers() {
+        // Handle clicks outside modals
+        window.addEventListener('click', (event) => {
+            if (event.target.classList.contains('modal')) {
+                const modalId = event.target.id;
+                this.closeModal(modalId);
+            }
+        });
+
+        // Handle Escape key
+        window.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                ['yamlModal', 'logsModal', 'eventsModal'].forEach(modalId => {
+                    this.closeModal(modalId);
+                });
+            }
+        });
+
+        // Handle close buttons
+        document.querySelectorAll('.modal-close').forEach(button => {
+            button.addEventListener('click', () => {
+                const modal = button.closest('.modal');
+                if (modal) {
+                    this.closeModal(modal.id);
+                }
+            });
+        });
+    }
+};
+
+// Utility Functions
+const utils = {
+    getUpdateTime(item) {
+        const dates = [
+            item.lastUpdateTime,
+            item.startTime,
+            item.creationTime
+        ].filter(date => {
+            return date && date !== '0001-01-01T00:00:00Z' && !isNaN(new Date(date).getTime());
+        });
+
+        return dates.length > 0 ? new Date(dates[0]).getTime() : 0;
+    },
+
+    formatTimeAgo(dateISOString) {
+        if (!dateISOString ||
+            dateISOString === '0001-01-01T00:00:00Z' ||
+            isNaN(new Date(dateISOString).getTime())) {
+            return '-';
+        }
+
+        const date = new Date(dateISOString);
+        const now = new Date();
+        const seconds = Math.floor((now - date) / 1000);
+
+        if (seconds < 0) return 'just now';
+
+        const intervals = [
+            { label: 'y', seconds: 365 * 24 * 60 * 60 },
+            { label: 'mo', seconds: 30 * 24 * 60 * 60 },
+            { label: 'd', seconds: 24 * 60 * 60 },
+            { label: 'h', seconds: 60 * 60 },
+            { label: 'm', seconds: 60 },
+            { label: 's', seconds: 1 }
+        ];
+
+        const results = [];
+        let remainingSeconds = seconds;
+
+        for (const interval of intervals) {
+            const value = Math.floor(remainingSeconds / interval.seconds);
+            if (value >= 1) {
+                results.push(`${value}${interval.label}`);
+                remainingSeconds %= interval.seconds;
+                if (results.length === 2) break;
+            }
+        }
+
+        return results.length > 0 ? results.join(' ') : 'just now';
+    },
+
+    getStatusClass(type, item) {
+        if (type === 'Pod') {
+            return item.status === 'Running' ? 'status-running' : 'status-error';
+        }
+        const ready = item.readyReplicas || 0;
+        const desired = item.replicas || 0;
+        return ready === desired ? 'status-running' : 'status-error';
+    },
+
+    getReplicasStatus(type, item) {
+        if (type === 'Pod') {
+            return item.status;
+        }
+        const ready = item.readyReplicas || 0;
+        const desired = item.replicas || 0;
+        return `${ready}/${desired}`;
+    },
+
+    parseCPU(value) {
+        if (!value) return 0;
+        if (value.endsWith('m')) {
+            return parseFloat(value) / 1000;
+        }
+        if (value.endsWith('n')) {
+            return parseFloat(value) / 1000000000;
+        }
+        if (value.endsWith('u')) {
+            return parseFloat(value) / 1000000;
+        }
+        return parseFloat(value);
+    },
+
+    parseMemory(value) {
+        if (!value) return 0;
+        const units = {
+            'Ki': 1024,
+            'Mi': 1024 * 1024,
+            'Gi': 1024 * 1024 * 1024,
+            'Ti': 1024 * 1024 * 1024 * 1024,
+            'K': 1000,
+            'M': 1000 * 1000,
+            'G': 1000 * 1000 * 1000,
+            'T': 1000 * 1000 * 1000 * 1000,
+        };
+
+        for (const [unit, multiplier] of Object.entries(units)) {
+            if (value.endsWith(unit)) {
+                return parseFloat(value) * multiplier;
+            }
+        }
+        return parseFloat(value);
+    },
+
+    formatCPU(value) {
+        if (!value) return '0';
+
+        if (value < 1) {
+            const millicores = Math.round(value * 1000);
+            if (millicores < 1) {
+                return '< 1m';
+            }
+            return `${millicores}m`;
+        }
+
+        return value.toFixed(2);
+    },
+
+    formatCPUWithUnit(value) {
+        if (!value) return '0 cores';
+
+        if (value < 1) {
+            const millicores = Math.round(value * 1000);
+            if (millicores < 1) {
+                return '< 1m core';
+            }
+            return `${millicores}m cores`;
+        }
+
+        return value === 1 ? '1 core' : `${value.toFixed(2)} cores`;
+    },
+
+    formatMemory(bytes) {
+        if (!bytes) return '0';
+        const units = ['B', 'Ki', 'Mi', 'Gi', 'Ti'];
+        let value = bytes;
+        let unitIndex = 0;
+
+        while (value >= 1024 && unitIndex < units.length - 1) {
+            value /= 1024;
+            unitIndex++;
+        }
+
+        return `${value.toFixed(1)}${units[unitIndex]}`;
+    },
+
+    async copyPortForward(cmd) {
+        try {
+            await navigator.clipboard.writeText(cmd);
+            this.showCopyTooltip('Command copied to clipboard!');
+        } catch (err) {
+            console.error('Failed to copy command:', err);
+            this.showCopyTooltip('Failed to copy command');
+        }
+    },
+
+    showCopyTooltip(message) {
+        const existingTooltip = document.getElementById('copyTooltip');
+        if (existingTooltip) {
+            existingTooltip.remove();
+        }
+
+        const tooltip = document.createElement('div');
+        tooltip.id = 'copyTooltip';
+        tooltip.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            box-shadow: var(--shadow-lg);
+            z-index: 1000;
+            border: 1px solid var(--border-color);
+            animation: fadeInOut 2s ease-in-out forwards;
+        `;
+        tooltip.textContent = message;
+
+        if (!document.getElementById('tooltipAnimation')) {
+            const style = document.createElement('style');
+            style.id = 'tooltipAnimation';
+            style.textContent = `
+                @keyframes fadeInOut {
+                    0% { opacity: 0; }
+                    10% { opacity: 1; }
+                    90% { opacity: 1; }
+                    100% { opacity: 0; }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        document.body.appendChild(tooltip);
+        setTimeout(() => tooltip.remove(), 2000);
+    }
+};
+
+// Events Queue Management
+const eventsQueue = {
+    process() {
+        if (eventsCheckQueue.size === 0) return;
+
+        const batchSize = 10;
+        let processed = 0;
+        const namespace = new URLSearchParams(window.location.search).get('namespace') || 'default';
+        const batch = [];
+
+        for (const [key, {type, name}] of eventsCheckQueue) {
+            if (processed >= batchSize) break;
+
+            const cacheKey = `${namespace}-${type}-${name}`;
+            const cached = eventsCheckCache.get(cacheKey);
+            const now = Date.now();
+
+            if (cached && (now - cached.timestamp) < EVENTS_CACHE_TIMEOUT) {
+                this.updateEventsButton(type, name, cached.count);
+                eventsCheckQueue.delete(key);
+                processed++;
+                continue;
+            }
+
+            batch.push({type, name});
+            eventsCheckQueue.delete(key);
+            processed++;
+        }
+
+        if (batch.length > 0) {
+            Promise.all(batch.map(({type, name}) =>
+                this.checkEvents(namespace, type, name)
+            )).finally(() => {
+                if (eventsCheckQueue.size > 0) {
+                    eventsCheckTimeout = setTimeout(() => this.process(), 100);
+                }
+                if (currentStatusFilter === 'events') {
+                    filterWorkloads();
+                }
+            });
+        } else if (eventsCheckQueue.size > 0) {
+            eventsCheckTimeout = setTimeout(() => this.process(), 100);
+        }
+    },
+
+    async checkEvents(namespace, type, name) {
+        try {
+            const response = await fetch(`/api/events-count/${namespace}/${type.toLowerCase()}/${name}`);
+            if (!response.ok) return;
+
+            const data = await response.json();
+            const cacheKey = `${namespace}-${type}-${name}`;
+
+            eventsCheckCache.set(cacheKey, {
+                count: data.count,
+                timestamp: Date.now()
+            });
+
+            this.updateEventsButton(type, name, data.count);
+        } catch (error) {
+            console.error(`Error checking events for ${type}/${name}:`, error);
+        }
+    },
+
+    updateEventsButton(type, name, count) {
+        const buttonContainer = document.getElementById(`events-button-${type}-${name}`);
+        if (buttonContainer) {
+            if (count > 0) {
+                buttonContainer.innerHTML = `
+                    <button class="events-button" onclick="modalManager.showEvents('${type}', '${name}')">
+                        Events <span class="events-count">${count}</span>
+                    </button>
+                `;
+            } else {
+                buttonContainer.innerHTML = '';
+            }
+        }
+    },
+
+    add(type, name) {
+        const key = `${type}-${name}`;
+        if (!eventsCheckQueue.has(key)) {
+            eventsCheckQueue.set(key, {type, name});
+
+            if (eventsCheckTimeout) {
+                clearTimeout(eventsCheckTimeout);
+            }
+
+            if (eventsCheckQueue.size === 1) {
+                this.process();
+            } else {
+                eventsCheckTimeout = setTimeout(() => this.process(), 100);
+            }
+        }
+    },
+
+    clear() {
+        eventsCheckQueue.clear();
+        if (eventsCheckTimeout) {
+            clearTimeout(eventsCheckTimeout);
+            eventsCheckTimeout = null;
+        }
+    }
+};
+
+// Initialize Application
+function initializeApp() {
+    dataManager.loadNamespaces();
+    eventHandlers.setupFilterHandlers();
+    eventHandlers.setupSortHandler();
+    eventHandlers.setupModalHandlers();
+
+    // Add namespace change handler
+    document.getElementById('namespaceSelect').addEventListener('change', eventHandlers.handleNamespaceChange);
+
+    // Add container select change handler
+    document.getElementById('containerSelect').addEventListener('change', () => modalManager.refreshLogs());
+
+    startPeriodicUpdates();
+}
+
+function startPeriodicUpdates() {
+    setInterval(() => {
+        dataManager.fetchWorkloads(getCurrentNamespace(), true);
+    }, 30000);
+
+    setInterval(() => {
+        const workloadCards = document.querySelectorAll('.workload-card');
+        workloadCards.forEach(card => {
+            eventsQueue.add(card.dataset.type, card.dataset.name);
+        });
+    }, 30000);
+}
+
+// Start the application
+document.addEventListener('DOMContentLoaded', initializeApp);
+
+function filterWorkloads() {
+    const searchTerm = searchInput.value.toLowerCase();
+    const workloadGroups = document.querySelectorAll('.workload-group');
+
+    // Update filter button states
+    document.getElementById('typeFilter').classList.toggle('active', currentTypeFilter !== 'all');
+    document.getElementById('statusFilter').classList.toggle('active', currentStatusFilter !== 'all');
+
+    // Update filter option states
+    document.querySelectorAll('#typeDropdown .filter-option').forEach(opt => {
+        opt.classList.toggle('active', opt.dataset.type === currentTypeFilter);
+    });
+    document.querySelectorAll('#statusDropdown .filter-option').forEach(opt => {
+        opt.classList.toggle('active', opt.dataset.status === currentStatusFilter);
+    });
+
+    workloadGroups.forEach(group => {
+        const type = group.dataset.type;
+        let shouldShow = true;
+
+        // Type filter
+        if (currentTypeFilter !== 'all' && type !== currentTypeFilter) {
+            shouldShow = false;
+        }
+
+        // Status filter
+        if (shouldShow && currentStatusFilter !== 'all') {
+            if (currentStatusFilter === 'events') {
+                // Check if any workload in the group has events using cache
+                const namespace = new URLSearchParams(window.location.search).get('namespace') || 'default';
+                const workloadCards = Array.from(group.querySelectorAll('.workload-card'));
+                shouldShow = workloadCards.some(card => {
+                    const cardType = card.dataset.type;
+                    const cardName = card.dataset.name;
+                    const cacheKey = `${namespace}-${cardType}-${cardName}`;
+                    const cached = eventsCheckCache.get(cacheKey);
+                    return cached && cached.count > 0;
+                });
+            } else {
+                // Get all pods for this group
+                const pods = Array.from(group.querySelectorAll('.workload-card[data-type="Pod"]'));
+                const podStatuses = pods.map(pod => {
+                    const podData = workloadsData.pods.find(p => p.name === pod.dataset.name);
+                    return podData ? utils.getStatusClass('Pod', podData) : null;
+                }).filter(Boolean);
+
+                // Get main resource status
+                const mainItem = workloadsData[type.toLowerCase() === 'deployment' ? 'deployments' : 'stateful_sets']
+                    ?.find(item => item.name === group.dataset.name);
+                const mainStatus = mainItem ? utils.getStatusClass(type, mainItem) : null;
+
+                if (currentStatusFilter === 'running') {
+                    // Show only if main resource and all pods are running
+                    shouldShow = mainStatus === 'status-running' && (!podStatuses.length || !podStatuses.some(s => s !== 'status-running'));
+                } else if (currentStatusFilter === 'error') {
+                    // Show if either main resource or any pod has error
+                    shouldShow = mainStatus === 'status-error' || podStatuses.some(s => s === 'status-error');
+                }
+            }
+        }
+
+        // Search filter
+        if (shouldShow && searchTerm) {
+            const name = group.dataset.name.toLowerCase();
+            const type = group.dataset.type.toLowerCase();
+            shouldShow = name.includes(searchTerm) || type.includes(searchTerm);
+
+            // Also check child pods
+            if (!shouldShow) {
+                const pods = Array.from(group.querySelectorAll('.workload-card[data-type="Pod"]'));
+                shouldShow = pods.some(pod => pod.dataset.name.toLowerCase().includes(searchTerm));
+            }
+        }
+
+        group.style.display = shouldShow ? 'block' : 'none';
+    });
+}
+</script>
+</body>
+</html>
