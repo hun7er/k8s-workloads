@@ -1,6 +1,6 @@
 # Use the official Golang image to create a build artifact.
 # This is based on Debian and sets the GOPATH to /go.
-FROM golang:1.21.3 as builder
+FROM golang:1.23.5 AS builder
 
 # Create and change to the app directory.
 WORKDIR /app
@@ -20,11 +20,11 @@ RUN CGO_ENABLED=0 GOOS=linux go build -mod=readonly -v -o k8s-workloads
 # https://hub.docker.com/_/alpine
 # https://docs.docker.com/develop/develop-images/multistage-build/#use-multi-stage-builds
 FROM alpine:3
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates=20241121-r1
 
 # Copy the binary to the production image from the builder stage.
 COPY --from=builder /app/k8s-workloads /k8s-workloads
 COPY --from=builder /app/static /static
 
 # Run the web service on container startup.
-CMD ["/k8s-workloads"]
+CMD ["./k8s-workloads"]
